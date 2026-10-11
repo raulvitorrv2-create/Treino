@@ -177,7 +177,6 @@ async function renderTreinos(){
     <div class="row" style="margin-top:10px">
       <input id="tn" placeholder="Nome do treino (ex: Peito e tríceps)" style="flex:2 1 200px">
       <select id="td">${DIAS.map(d=>`<option>${d}</option>`).join("")}</select>
-      <input id="tv" placeholder="Link do vídeo no YouTube" style="flex:2 1 200px">
       <button class="btn" onclick="addTreino()">Salvar treino</button>
     </div>
   </div>` + ((treinos||[]).length ? treinos.map(t => {
@@ -187,29 +186,35 @@ async function renderTreinos(){
       <div class="treino-h"><div class="row"><span class="dia">${esc(t.dia)}</span>${t.dia===hd?`<span class="hojeb">Treino de hoje</span>`:""}<h3>${esc(t.nome)}</h3></div>
       <button class="x" title="Excluir treino" onclick="delTreino('${t.id}')">🗑</button></div>
       <div class="row" style="margin-bottom:10px"><input type="date" id="sd-${t.id}" value="${iso(hoje)}" aria-label="Data do treino"><input id="so-${t.id}" placeholder="Observação (opcional)" style="flex:1 1 160px"><button class="btn" onclick="treinei('${t.id}')">🔥 Treinei</button></div>
-      ${id ? `<iframe class="video" src="https://www.youtube.com/embed/${id}?rel=0&playsinline=1" title="Vídeo do treino" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe>` : ""}
+      
       ${ex.length ? `<table><tr><th>Exercício</th><th>Séries</th><th>Repetições</th><th>Carga (kg)</th><th></th></tr>
       ${ex.map(e=>`<tr><td>${esc(e.nome)}</td><td>${esc(e.series)}</td><td>${esc(e.repeticoes)}</td><td>${esc(e.carga)}</td>
-      <td style="white-space:nowrap"><button class="x" title="Editar exercício" onclick="editEx('${e.id}')">✎</button><button class="x" title="Excluir exercício" onclick="delEx('${e.id}')">✕</button></td></tr>`).join("")}</table>` : `<p class="empty">Nenhum exercício ainda. Adicione abaixo.</p>`}
+      <td style="white-space:nowrap">${ytId(e.video_url)?`<button class="x" title="Ver vídeo" onclick="verVideo('${e.id}')">▶</button>`:""}<button class="x" title="Editar exercício" onclick="editEx('${e.id}')">✎</button><button class="x" title="Excluir exercício" onclick="delEx('${e.id}')">✕</button></td></tr>${ytId(e.video_url)?`<tr id="v-${e.id}" class="hide"><td colspan="5"><iframe class="video" data-src="https://www.youtube.com/embed/${ytId(e.video_url)}?rel=0&playsinline=1" title="Vídeo do exercício" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></td></tr>`:""}`).join("")}</table>` : `<p class="empty">Nenhum exercício ainda. Adicione abaixo.</p>`}
       <div class="row" style="margin-top:12px">
         <input id="en-${t.id}" placeholder="Exercício" style="flex:2 1 150px">
         <input id="es-${t.id}" type="number" placeholder="Séries" style="width:90px">
         <input id="er-${t.id}" placeholder="Reps (ex: 12)" style="width:110px">
         <input id="ec-${t.id}" placeholder="Carga kg" style="width:100px">
+        <input id="ev-${t.id}" placeholder="Link do vídeo (YouTube)" style="flex:2 1 180px">
         <button class="btn ghost" onclick="addEx('${t.id}')">Adicionar</button>
       </div></div>`;
   }).join("") : `<p class="empty">Você ainda não cadastrou treinos.</p>`);
 }
 async function addTreino(){
   const nome = $("#tn").value.trim(); if(!nome) return alert("Digite o nome do treino.");
-  await sb.from("treinos").insert({nome, dia:$("#td").value, video_url:$("#tv").value.trim()});
+  await sb.from("treinos").insert({nome, dia:$("#td").value});
   renderTreinos();
 }
 async function delTreino(id){ if(confirm("Excluir este treino e seus exercícios?")){ await sb.from("treinos").delete().eq("id",id); renderTreinos(); } }
 async function addEx(tid){
   const nome = $("#en-"+tid).value.trim(); if(!nome) return alert("Digite o nome do exercício.");
-  await sb.from("exercicios").insert({treino_id:tid, nome, series:$("#es-"+tid).value||null, repeticoes:$("#er-"+tid).value, carga:$("#ec-"+tid).value, ordem:Date.now()%2000000000});
+  await sb.from("exercicios").insert({treino_id:tid, nome, series:$("#es-"+tid).value||null, repeticoes:$("#er-"+tid).value, carga:$("#ec-"+tid).value, video_url:$("#ev-"+tid).value.trim()||null, ordem:Date.now()%2000000000});
   renderTreinos();
+}
+function verVideo(id){
+  const r=document.getElementById("v-"+id), f=r.querySelector("iframe");
+  if(!f.src) f.src=f.dataset.src;
+  r.classList.toggle("hide");
 }
 async function editEx(id){
   const {data:e} = await sb.from("exercicios").select("*").eq("id",id).single();
@@ -217,7 +222,8 @@ async function editEx(id){
   const series = prompt("Séries:", e.series ?? ""); if(series===null) return;
   const reps = prompt("Repetições:", e.repeticoes ?? ""); if(reps===null) return;
   const carga = prompt("Carga (kg):", e.carga ?? ""); if(carga===null) return;
-  await sb.from("exercicios").update({nome:nome.trim()||e.nome, series:series||null, repeticoes:reps, carga}).eq("id",id);
+  const video = prompt("Link do vídeo no YouTube (deixe vazio para remover):", e.video_url ?? ""); if(video===null) return;
+  await sb.from("exercicios").update({nome:nome.trim()||e.nome, series:series||null, repeticoes:reps, carga, video_url:video.trim()||null}).eq("id",id);
   renderTreinos(); renderHistorico();
 }
 async function delEx(id){ await sb.from("exercicios").delete().eq("id",id); renderTreinos(); }
