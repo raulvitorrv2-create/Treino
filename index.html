@@ -58,11 +58,16 @@ td:nth-child(4){color:var(--royal);font-weight:600}
 .cal .vazio{visibility:hidden}
 .leg{display:flex;gap:18px;color:var(--mut);font-size:14px;margin-top:14px}
 .leg i{display:inline-block;width:14px;height:14px;border-radius:5px;margin-right:6px;vertical-align:-2px}
-#login{max-width:360px;margin:12vh auto;padding:28px}
-#login h2{font-size:40px}
-#login input{width:100%;margin-bottom:10px}
-.msg{color:var(--red);font-size:14px;min-height:20px}
 .hide{display:none}
+.cg{width:84px;padding:6px 8px;font-weight:600;color:var(--royal);text-align:center;background:#fff}
+.cg.ok{border-color:#22a559;box-shadow:0 0 0 3px rgba(34,165,89,.18)}
+.chips{display:flex;gap:6px;overflow-x:auto;margin-bottom:16px;padding-bottom:4px}
+.chips button{border:1.5px solid var(--line);background:#fff;color:var(--mut);border-radius:999px;padding:8px 16px;font:600 15px Barlow;cursor:pointer;white-space:nowrap}
+.chips button.hj{border-color:var(--royal);color:var(--royal)}
+.chips button.on{background:linear-gradient(135deg,var(--royal),#4f86ff);color:#fff;border-color:transparent}
+body:not(.adm) .edit{display:none!important}
+body.adm .admtag{display:inline-block}
+.admtag{display:none;background:#fff3c4;color:#8a5a00;border-radius:999px;padding:3px 12px;font:600 13px Barlow;margin-top:8px}
 .card.hoje{border:2px solid var(--royal);box-shadow:0 12px 30px rgba(33,89,240,.25)}
 .hojeb{background:#fff3c4;color:#8a5a00;border-radius:999px;padding:3px 12px;font:600 13px Barlow}
 #tm{position:fixed;right:16px;bottom:16px;z-index:9;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
@@ -90,7 +95,7 @@ td:nth-child(4){color:var(--royal);font-weight:600}
 <!-- APP -->
 <div id="app">
   <header>
-    <div class="top"><div><h1>Meus Treinos</h1><p>Treine, registre e veja sua evolução.</p></div><button class="btn ghost" onclick="backup()">⬇ Backup</button></div>
+    <div class="top"><div><h1>Meus Treinos</h1><p>Treine, registre e veja sua evolução.</p><span class="admtag">Modo edição ligado</span></div><div class="row"><button class="btn ghost edit" onclick="backup()">⬇ Backup</button><button class="btn ghost" id="admBtn" onclick="admClick()">✏️ Editar</button></div></div>
     <nav id="nav">
       <button data-t="treinos" class="on">Treinos</button>
       <button data-t="historico">Histórico 🔥</button>
@@ -127,6 +132,7 @@ const iso = d => new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0
 const parse = k => { const [y,m,d] = k.split("-").map(Number); return new Date(y,m-1,d); };
 let pesoAno = hoje.getFullYear(), pesoMes = hoje.getMonth()+1;
 let corAno = hoje.getFullYear(), corMes = hoje.getMonth();
+let diaSel = DIAS[(hoje.getDay()+6)%7];
 
 /* ---------- Timer de descanso ---------- */
 let tInt=null, evoSel="";
@@ -147,15 +153,28 @@ async function backup(){
   a.download="backup-treinos-"+iso(hoje)+".json"; a.click();
 }
 
+/* ---------- Admin ---------- */
+let admin = false;
+async function checaAdmin(){
+  try{ admin = localStorage.getItem("adm")==="1"; }catch(e){ admin=false; }
+  document.body.classList.toggle("adm", admin);
+  $("#admBtn").textContent = admin ? "✅ Sair da edição" : "✏️ Editar";
+}
+async function admClick(){
+  try{ localStorage.setItem("adm", admin ? "0" : "1"); }catch(e){}
+  await checaAdmin(); recarregar();
+}
+function recarregar(){ renderTreinos(); renderHistorico(); renderPeso(); renderCorrida(); }
+
 /* ---------- Início ---------- */
-function iniciar(){
+async function iniciar(){
   if(!sb){
     $("#treinos").innerHTML = `<div class="card"><h2>Falta configurar</h2><p class="sub" style="margin-top:8px">${configurado
       ? "Não foi possível carregar o Supabase. Verifique a internet e abra este arquivo pelo navegador."
       : "Abra este arquivo no Bloco de Notas e cole a URL e a anon key do Supabase no topo do script."}</p></div>`;
     return;
   }
-  renderTreinos(); renderHistorico(); renderPeso(); renderCorrida();
+  await checaAdmin(); recarregar();
 }
 $("#nav").addEventListener("click", e => {
   const t = e.target.dataset.t; if(!t) return;
@@ -171,26 +190,28 @@ async function renderTreinos(){
   const ordem = t => DIAS.indexOf(t.dia);
   const hd = DIAS[(hoje.getDay()+6)%7];
   (treinos||[]).sort((a,b)=>((b.dia===hd)-(a.dia===hd))||ordem(a)-ordem(b));
+  const lista = diaSel==="Todos" ? (treinos||[]) : (treinos||[]).filter(t=>t.dia===diaSel);
   $("#treinos").innerHTML = `
-  <div class="card">
+  <div class="chips">${[...DIAS,"Todos"].map(d=>`<button class="${d===diaSel?"on":""}${d===hd?" hj":""}" onclick="diaSel='${d}';renderTreinos()">${d==="Todos"?"Todos":d.slice(0,3)}</button>`).join("")}</div>
+  ${diaSel!=="Todos"?`<div class="card edit"><h2>Adicionar exercício — ${diaSel}</h2>
+    <div class="row" style="margin-top:10px"><input id="qn" placeholder="Exercício" style="flex:2 1 150px"><input id="qs" type="number" placeholder="Séries" style="width:90px"><input id="qr" placeholder="Reps" style="width:100px"><input id="qc" placeholder="Carga kg" style="width:100px"><input id="qv" placeholder="Link do vídeo (YouTube)" style="flex:2 1 180px"><button class="btn" onclick="addExDia()">Adicionar ao dia</button></div></div>`:""}
+  <div class="card edit">
     <h2>Novo treino</h2>
     <div class="row" style="margin-top:10px">
       <input id="tn" placeholder="Nome do treino (ex: Peito e tríceps)" style="flex:2 1 200px">
-      <select id="td">${DIAS.map(d=>`<option>${d}</option>`).join("")}</select>
+      <select id="td">${DIAS.map(d=>`<option ${d===diaSel?"selected":""}>${d}</option>`).join("")}</select>
       <button class="btn" onclick="addTreino()">Salvar treino</button>
     </div>
-  </div>` + ((treinos||[]).length ? treinos.map(t => {
-    const id = ytId(t.video_url);
+  </div>` + (lista.length ? lista.map(t => {
     const ex = (t.exercicios||[]).sort((a,b)=>a.ordem-b.ordem);
     return `<div class="card${t.dia===hd?" hoje":""}">
       <div class="treino-h"><div class="row"><span class="dia">${esc(t.dia)}</span>${t.dia===hd?`<span class="hojeb">Treino de hoje</span>`:""}<h3>${esc(t.nome)}</h3></div>
-      <button class="x" title="Excluir treino" onclick="delTreino('${t.id}')">🗑</button></div>
-      <div class="row" style="margin-bottom:10px"><input type="date" id="sd-${t.id}" value="${iso(hoje)}" aria-label="Data do treino"><input id="so-${t.id}" placeholder="Observação (opcional)" style="flex:1 1 160px"><button class="btn" onclick="treinei('${t.id}')">🔥 Treinei</button></div>
-      
+      <button class="x edit" title="Excluir treino" onclick="delTreino('${t.id}')">🗑</button></div>
+      <div class="row edit" style="margin-bottom:10px"><input type="date" id="sd-${t.id}" value="${iso(hoje)}" aria-label="Data do treino"><input id="so-${t.id}" placeholder="Observação (opcional)" style="flex:1 1 160px"><button class="btn" onclick="treinei('${t.id}')">🔥 Treinei</button></div>
       ${ex.length ? `<table><tr><th>Exercício</th><th>Séries</th><th>Repetições</th><th>Carga (kg)</th><th></th></tr>
-      ${ex.map(e=>`<tr><td>${esc(e.nome)}</td><td>${esc(e.series)}</td><td>${esc(e.repeticoes)}</td><td>${esc(e.carga)}</td>
-      <td style="white-space:nowrap">${ytId(e.video_url)?`<button class="x" title="Ver vídeo" onclick="verVideo('${e.id}')">▶</button>`:""}<button class="x" title="Editar exercício" onclick="editEx('${e.id}')">✎</button><button class="x" title="Excluir exercício" onclick="delEx('${e.id}')">✕</button></td></tr>${ytId(e.video_url)?`<tr id="v-${e.id}" class="hide"><td colspan="5"><iframe class="video" data-src="https://www.youtube.com/embed/${ytId(e.video_url)}?rel=0&playsinline=1" title="Vídeo do exercício" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></td></tr>`:""}`).join("")}</table>` : `<p class="empty">Nenhum exercício ainda. Adicione abaixo.</p>`}
-      <div class="row" style="margin-top:12px">
+      ${ex.map(e=>`<tr><td>${esc(e.nome)}</td><td>${esc(e.series)}</td><td>${esc(e.repeticoes)}</td><td><input class="cg" value="${esc(e.carga)}" inputmode="decimal" placeholder="kg" aria-label="Carga em kg" onchange="salvaCarga('${e.id}',this)"></td>
+      <td style="white-space:nowrap">${ytId(e.video_url)?`<button class="x" title="Ver vídeo" onclick="verVideo('${e.id}')">▶</button>`:""}<button class="x edit" title="Editar exercício" onclick="editEx('${e.id}')">✎</button><button class="x edit" title="Excluir exercício" onclick="delEx('${e.id}')">✕</button></td></tr>${ytId(e.video_url)?`<tr id="v-${e.id}" class="hide"><td colspan="5"><iframe class="video" data-src="https://www.youtube.com/embed/${ytId(e.video_url)}?rel=0&playsinline=1" title="Vídeo do exercício" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></td></tr>`:""}`).join("")}</table>` : `<p class="empty">Nenhum exercício ainda. Adicione abaixo.</p>`}
+      <div class="row edit" style="margin-top:12px">
         <input id="en-${t.id}" placeholder="Exercício" style="flex:2 1 150px">
         <input id="es-${t.id}" type="number" placeholder="Séries" style="width:90px">
         <input id="er-${t.id}" placeholder="Reps (ex: 12)" style="width:110px">
@@ -198,7 +219,19 @@ async function renderTreinos(){
         <input id="ev-${t.id}" placeholder="Link do vídeo (YouTube)" style="flex:2 1 180px">
         <button class="btn ghost" onclick="addEx('${t.id}')">Adicionar</button>
       </div></div>`;
-  }).join("") : `<p class="empty">Você ainda não cadastrou treinos.</p>`);
+  }).join("") : `<p class="empty">${diaSel==="Todos"?"Você ainda não cadastrou treinos.":"Nenhum exercício em "+diaSel+" ainda."}</p>`);
+}
+async function addExDia(){
+  const nome=$("#qn").value.trim(); if(!nome) return alert("Digite o nome do exercício.");
+  const {data:t}=await sb.from("treinos").select("id").eq("dia",diaSel).order("created_at").limit(1);
+  let tid=t&&t[0]?.id;
+  if(!tid){
+    const {data:n,error}=await sb.from("treinos").insert({nome:"Treino de "+diaSel,dia:diaSel}).select("id").single();
+    if(error) return alert("Erro: "+error.message); tid=n.id;
+  }
+  const {error:e2}=await sb.from("exercicios").insert({treino_id:tid,nome,series:$("#qs").value||null,repeticoes:$("#qr").value,carga:$("#qc").value,video_url:$("#qv").value.trim()||null,ordem:Date.now()%2000000000});
+  if(e2) return alert("Erro: "+e2.message);
+  renderTreinos();
 }
 async function addTreino(){
   const nome = $("#tn").value.trim(); if(!nome) return alert("Digite o nome do treino.");
@@ -210,6 +243,11 @@ async function addEx(tid){
   const nome = $("#en-"+tid).value.trim(); if(!nome) return alert("Digite o nome do exercício.");
   await sb.from("exercicios").insert({treino_id:tid, nome, series:$("#es-"+tid).value||null, repeticoes:$("#er-"+tid).value, carga:$("#ec-"+tid).value, video_url:$("#ev-"+tid).value.trim()||null, ordem:Date.now()%2000000000});
   renderTreinos();
+}
+async function salvaCarga(id,el){
+  const {error}=await sb.from("exercicios").update({carga:el.value.trim()}).eq("id",id);
+  if(error){ alert("Não foi possível salvar a carga: "+error.message); return; }
+  el.classList.add("ok"); setTimeout(()=>el.classList.remove("ok"),1200);
 }
 function verVideo(id){
   const r=document.getElementById("v-"+id), f=r.querySelector("iframe");
@@ -265,7 +303,7 @@ async function renderHistorico(){
     const ex=x.detalhe||x.treinos?.exercicios||[], dt=parse(x.data);
     return `<div class="sess"><span class="d">${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")} · ${DIAS[(dt.getDay()+6)%7].slice(0,3)}</span>
     <details><summary>${esc(x.treinos?.nome||x.nome)}</summary>${ex.length?`<ul>${ex.map(e=>`<li>${esc(e.nome)} — ${esc(e.series||"")}x${esc(e.repeticoes||"")} ${e.carga?`· ${esc(e.carga)} kg`:""}</li>`).join("")}</ul>`:""}${x.obs?`<p class="sub" style="margin:6px 0 0">📝 ${esc(x.obs)}</p>`:""}</details>
-    <button class="x" title="Remover" onclick="delSessao('${x.id}')">✕</button></div>`;}).join("")).join("") : `<p class="empty">Nenhum treino marcado ainda. Abra um treino e toque em "Treinei".</p>`}</div>`;
+    <button class="x edit" title="Remover" onclick="delSessao('${x.id}')">✕</button></div>`;}).join("")).join("") : `<p class="empty">Nenhum treino marcado ainda. Abra um treino e toque em "Treinei".</p>`}</div>`;
 }
 async function delSessao(id){ await sb.from("sessoes").delete().eq("id",id); renderHistorico(); }
 
@@ -278,7 +316,7 @@ async function renderPeso(){
   const pts = lista.map(p=>+p.peso);
   const variacao = pts.length>1 ? (pts[pts.length-1]-pts[0]).toFixed(1) : null;
   $("#peso").innerHTML = `
-  <div class="card"><h2>Registrar peso</h2>
+  <div class="card edit"><h2>Registrar peso</h2>
     <div class="row" style="margin-top:10px"><input id="pd" type="date" value="${iso(hoje)}"><input id="pp" type="number" step="0.1" placeholder="Peso (kg)" style="width:130px">
     <button class="btn" onclick="addPeso()">Salvar peso</button></div></div>
   <div class="card"><div class="treino-h"><h2>Histórico</h2>
@@ -287,7 +325,7 @@ async function renderPeso(){
     ${variacao!==null?`<p class="sub">Variação no período: <b>${variacao>0?"+":""}${variacao} kg</b></p>`:""}
     ${metaPeso(todos)}
     ${grafico(lista)}
-    ${lista.length?`<table><tr><th>Data</th><th>Peso</th><th></th></tr>${[...lista].reverse().map(p=>`<tr><td>${p.data.split("-").reverse().join("/")}</td><td>${p.peso} kg</td><td><button class="x" onclick="delPeso('${p.id}')">✕</button></td></tr>`).join("")}</table>`:`<p class="empty">Sem registros neste período.</p>`}
+    ${lista.length?`<table><tr><th>Data</th><th>Peso</th><th></th></tr>${[...lista].reverse().map(p=>`<tr><td>${p.data.split("-").reverse().join("/")}</td><td>${p.peso} kg</td><td><button class="x edit" onclick="delPeso('${p.id}')">✕</button></td></tr>`).join("")}</table>`:`<p class="empty">Sem registros neste período.</p>`}
   </div>`;
 }
 function linhaSvg(v){
@@ -342,8 +380,8 @@ async function renderCorrida(){
     <div class="treino-h"><button class="btn ghost" onclick="mudaMes(-1)">‹</button><h2>${MESES[corMes]} ${corAno}</h2><button class="btn ghost" onclick="mudaMes(1)">›</button></div>
     <p class="sub">Toque no dia: 1x = correu, 2x = não correu, 3x = limpar. Neste mês: <b>${corri}</b> ${corri===1?"dia":"dias"} de corrida.</p>
     <div class="cal">${["D","S","T","Q","Q","S","S"].map(x=>`<div class="h">${x}</div>`).join("")}${cel}</div>
-    <div class="leg"><span><i style="background:var(--blue)"></i>Correu</span><span><i style="border:2px solid var(--red)"></i>Não correu</span></div>
-    <div class="row" style="margin-top:16px"><input type="date" id="cd" value="${iso(hoje)}"><input id="ck" type="number" step="0.01" placeholder="Km" style="width:90px"><input id="cm" type="number" placeholder="Minutos" style="width:100px"><button class="btn" onclick="salvaCorrida()">Salvar corrida</button></div>
+    <div class="leg"><span><i style="background:var(--royal)"></i>Correu</span><span><i style="border:2px solid var(--red)"></i>Não correu</span></div>
+    <div class="row edit" style="margin-top:16px"><input type="date" id="cd" value="${iso(hoje)}"><input id="ck" type="number" step="0.01" placeholder="Km" style="width:90px"><input id="cm" type="number" placeholder="Minutos" style="width:100px"><button class="btn" onclick="salvaCorrida()">Salvar corrida</button></div>
     ${kmLista}</div>`;
 }
 function mudaMes(n){ corMes+=n; if(corMes<0){corMes=11;corAno--} if(corMes>11){corMes=0;corAno++} renderCorrida(); }
@@ -354,6 +392,7 @@ async function salvaCorrida(){
   corAno=+d.slice(0,4); corMes=+d.slice(5,7)-1; renderCorrida();
 }
 async function ciclo(k){
+  if(!admin) return;
   const {data} = await sb.from("corridas").select("*").eq("data",k).maybeSingle();
   if(!data) await sb.from("corridas").insert({data:k, correu:true});
   else if(data.correu) await sb.from("corridas").update({correu:false}).eq("id",data.id);
